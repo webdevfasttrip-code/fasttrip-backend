@@ -1,0 +1,9 @@
+﻿Loaded Prisma config from prisma.config.ts.
+
+Prisma config detected, skipping environment variable loading.
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-blue-scene-a1ivqho2-pooler.ap-southeast-1.aws.neon.tech"
+Error: P2002
+
+Unique constraint failed on the fields: (`iata`)
+

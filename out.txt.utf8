@@ -1,0 +1,45 @@
+﻿node.exe : Loaded Prisma 
+config from 
+prisma.config.ts.
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo       
+       : NotSpecified:   
+  (Loaded Prisma c...i   
+ sma.config.ts.:Strin    
+g) [], RemoteExcepti    
+on
+    + FullyQualifiedErro 
+   rId : NativeCommandE  
+  rror
+ 
+
+Prisma config detected, 
+skipping environment 
+variable loading.
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-blue-scene-a1ivqho2-pooler.ap-southeast-1.aws.neon.tech"
+
+- Introspecting based on datasource defined in prisma\schema.prisma
+Γ£ö Introspected 13 models and wrote them into prisma\schema.prisma in 4.44s
+      
+*** WARNING ***
+
+The following models were ignored as they do not have a valid unique identifier or id. This is currently not supported by Prisma Client:
+  - "Airlines"
+
+These fields are not supported by Prisma Client, because Prisma currently does not support their types:
+  - Model: "Airport", field: "tsv", original data type: "tsvector"
+
+These models were enriched with `@@map` information taken from the previous Prisma schema:
+  - "Airlines"
+  - "Airport"
+
+Run prisma generate to generate Prisma Client.
+

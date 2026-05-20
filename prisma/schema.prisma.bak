@@ -1,0 +1,623 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String             @id @default(uuid())
+  email           String             @unique
+  password        String?
+  isBlocked       Boolean            @default(false)
+  lastLoginAt     DateTime?
+  createdAt       DateTime           @default(now())
+  avatarUrl       String?
+  isEmailVerified Boolean            @default(false)
+  name            String?
+  phone           String?
+  provider        Provider           @default(LOCAL)
+  providerId      String?
+  role            UserRole           @default(USER)
+  updatedAt       DateTime           @default(now()) @updatedAt
+  internalNotes   String?
+  bookings        Booking[]
+  savedPassengers PassengerProfile[]
+  searchHistory   SearchHistory[]
+  supportTickets  SupportTicket[]
+  activityLogs    UserActivity[]
+}
+
+model AdminUser {
+  id               String          @id @default(uuid())
+  email            String          @unique
+  password         String
+  createdAt        DateTime        @default(now())
+  createdById      String?
+  isActive         Boolean         @default(true)
+  name             String
+  permissions      String[]
+  role             AdminRole       @default(ADMIN)
+  updatedAt        DateTime        @updatedAt
+  createdBy        AdminUser?      @relation("AdminCreator", fields: [createdById], references: [id])
+  createdUsers     AdminUser[]     @relation("AdminCreator")
+  assignedBookings Booking[]       @relation("AgentAssignments")
+  loginLogs        LoginLog[]
+  processedRefunds RefundRequest[]
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  performedBy String
+  targetId    String?
+  createdAt   DateTime @default(now())
+  details     Json?
+}
+
+model SearchLog {
+  id          String   @id @default(uuid())
+  origin      String
+  destination String
+  date        DateTime
+  userId      String?
+  isConverted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model LoginLog {
+  id          String    @id @default(uuid())
+  adminUserId String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id])
+}
+
+model SupplierConfig {
+  id            String       @id @default(uuid())
+  name          String       @unique
+  apiKey        String?
+  apiSecret     String?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  endpoint      String?
+  errorRate     Float        @default(0)
+  lastCheckedAt DateTime?
+  priority      Int          @default(1)
+  responseTime  Int          @default(0)
+  timeout       Int          @default(10000)
+  type          SupplierType @default(GDS)
+  updatedAt     DateTime     @updatedAt
+}
+
+model MarkupRule {
+  id          String       @id @default(uuid())
+  airlineCode String?
+  cabinClass  String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  markupType  MarkupType   @default(FLAT)
+  markupValue Float
+  name        String
+  priority    Int          @default(100)
+  routeFrom   String?
+  routeTo     String?
+  sector      SectorType   @default(ALL)
+  supplier    SupplierType @default(ALL)
+  updatedAt   DateTime     @updatedAt
+  userType    String?
+}
+
+model ConvenienceFee {
+  id            String     @id @default(uuid())
+  name          String
+  type          FeeType    @default(PER_PNR)
+  value         Float
+  airlineCode   String?
+  sector        SectorType @default(ALL)
+  paymentMethod String?
+  userType      String?
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model PassengerProfile {
+  id          String    @id @default(uuid())
+  userId      String
+  firstName   String
+  lastName    String
+  dob         DateTime?
+  gender      String?
+  passportNo  String?
+  nationality String?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model SearchHistory {
+  id          String   @id @default(uuid())
+  userId      String
+  origin      String
+  destination String
+  travelDate  DateTime
+  isReturn    Boolean  @default(false)
+  cabinClass  String?
+  searchedAt  DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model UserActivity {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model SeriesFare {
+  id          String   @id @default(uuid())
+  airlineCode String
+  origin      String
+  destination String
+  fixedPrice  Float
+  validFrom   DateTime
+  validTo     DateTime
+  isActive    Boolean  @default(true)
+}
+
+model Booking {
+  id                 String          @id @default(uuid())
+  userId             String
+  bookingRef         String          @unique
+  totalAmount        Float
+  bookingStatus      BookingStatus   @default(BOOKED)
+  paymentStatus      PaymentStatus   @default(INITIATED)
+  ticketNumber       String?         @unique
+  ticketIssuedAt     DateTime?
+  supplierOfferId    String?
+  selectedFlightData Json?
+  selectedFareOption Json?
+  selectedAddOns     Json?
+  pricingSnapshot    Json?
+  contactPhone       String?
+  contactEmail       String?
+  gstDetails         Json?
+  expiresAt          DateTime?
+  paymentOrderId     String?
+  paymentId          String?
+  paymentSignature   String?
+  paidAt             DateTime?
+  createdAt          DateTime        @default(now())
+  cancelReason       String?
+  cancelStatus       CancelStatus    @default(NONE)
+  assignedToId       String?
+  markupEarned       Float?          @default(0)
+  supplierCost       Float?          @default(0)
+  airlineCode        String?
+  destination        String?
+  origin             String?
+  discountAmount     Float?          @default(0)
+  promoCodeId        String?
+  airlineName        String?
+  pnr                String?
+  route              String?
+  supplierName       String?
+  travelDate         DateTime?
+  ttl                DateTime?
+  updatedAt          DateTime        @default(now()) @updatedAt
+  supplier           String?
+  supplierBookingRef String?
+  assignedTo         AdminUser?      @relation("AgentAssignments", fields: [assignedToId], references: [id])
+  promo              PromoCode?      @relation(fields: [promoCodeId], references: [id])
+  user               User            @relation(fields: [userId], references: [id])
+  logs               BookingLog[]
+  ledgerEntries      LedgerEntry[]
+  passengers         Passenger[]
+  payment            Payment?
+  refundRequests     RefundRequest[]
+  supportTickets     SupportTicket[]
+}
+
+model BookingLog {
+  id          String   @id @default(uuid())
+  bookingId   String
+  action      String
+  description String?
+  performedBy String?
+  createdAt   DateTime @default(now())
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+}
+
+model Airport {
+  id           Int                      @id @default(autoincrement())
+  airport_name String?
+  city         String?
+  latitude     Float?
+  longitude    Float?
+  continent    String?
+  iso_country  String?
+  iso_region   String?
+  gps_code     String?
+  iata_code    String?
+  search_count Int?                     @default(0)
+  created_at   DateTime?                @default(now()) @db.Timestamp(6)
+  tsv          Unsupported("tsvector")?
+
+  @@map("airports")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model Airlines {
+  airline_id   Int?
+  name         String?
+  iata         String?
+  icao         String?
+  callsign     String?
+  country      String?
+  logo_svg_url String?
+  logo_png_url String?
+
+  @@map("airlines")
+  @@ignore
+}
+
+model Passenger {
+  id           String    @id @default(uuid())
+  bookingId    String
+  firstName    String
+  lastName     String
+  gender       String
+  dateOfBirth  DateTime?
+  baggage      String?
+  meal         String?
+  seat         String?
+  ticketNumber String?
+  type         String    @default("ADT")
+  title        String?
+  booking      Booking   @relation(fields: [bookingId], references: [id])
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  bookingId String        @unique
+  amount    Float
+  status    PaymentStatus @default(INITIATED)
+  provider  String
+  createdAt DateTime      @default(now())
+  booking   Booking       @relation(fields: [bookingId], references: [id])
+}
+
+model SupportTicket {
+  id          String         @id @default(uuid())
+  bookingId   String?
+  userId      String?
+  subject     String
+  description String
+  type        TicketType     @default(GENERAL)
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  booking     Booking?       @relation(fields: [bookingId], references: [id])
+  user        User?          @relation(fields: [userId], references: [id])
+}
+
+model RefundRequest {
+  id              String       @id @default(uuid())
+  bookingId       String
+  amount          Float
+  cancellationFee Float        @default(0)
+  netRefund       Float
+  status          RefundStatus @default(PENDING)
+  reason          String?
+  processedById   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  booking         Booking      @relation(fields: [bookingId], references: [id])
+  processedBy     AdminUser?   @relation(fields: [processedById], references: [id])
+}
+
+model LedgerEntry {
+  id          String     @id @default(uuid())
+  bookingId   String?
+  amount      Float
+  type        LedgerType
+  description String?
+  referenceId String?
+  createdAt   DateTime   @default(now())
+  booking     Booking?   @relation(fields: [bookingId], references: [id])
+}
+
+model AutomationSettings {
+  id                     String   @id @default(uuid())
+  autoTicketingEnabled   Boolean  @default(false)
+  autoRefundEnabled      Boolean  @default(false)
+  highValueThreshold     Float    @default(50000)
+  requireApprovalEnabled Boolean  @default(true)
+  updatedAt              DateTime @updatedAt
+}
+
+model PromoCode {
+  id                   String            @id @default(uuid())
+  code                 String            @unique
+  name                 String
+  description          String?
+  internalNotes        String?
+  status               Boolean           @default(true)
+  visibility           PromoVisibility   @default(PUBLIC)
+  
+  // Validity
+  bookingStartDate     DateTime?
+  bookingEndDate       DateTime?
+  travelStartDate      DateTime?
+  travelEndDate        DateTime?
+  dayRestrictions      String[]          @default([]) // ["MONDAY", "TUESDAY", ...]
+
+  // Discount Rules
+  discountType         DiscountType      @default(FLAT)
+  discountValue        Float
+  maxDiscountCap       Float?
+  minBookingAmount     Float             @default(0)
+  maxBookingAmount     Float?
+  currency             String            @default("INR")
+  applyOn              String            @default("TOTAL") // BASE, TOTAL
+
+  // Flight Applicability
+  tripTypes            String[]          @default([]) // ["ONE_WAY", "ROUND_TRIP", "MULTI_CITY"]
+  sectorTypes          String[]          @default([]) // ["DOMESTIC", "INTERNATIONAL"]
+  cabinClasses         String[]          @default([]) // ["ECONOMY", "BUSINESS", ...]
+  allowedAirlines      String[]          @default([])
+  allowedOrigins       String[]          @default([])
+  allowedDestinations  String[]          @default([])
+  excludedRoutes       String[]          @default([])
+
+  // User Applicability
+  userTypes            String[]          @default(["B2C"]) // ["B2C", "AGENT", "CORPORATE"]
+  isNewUserOnly        Boolean           @default(false)
+  isLoginRequired      Boolean           @default(true)
+  isMobileVerifiedOnly Boolean           @default(false)
+
+  // Usage Restrictions
+  totalUsageLimit      Int?
+  usageCount           Int               @default(0)
+  perUserLimit         Int               @default(1)
+  perDayLimit          Int?
+  
+  // Platform & Channel
+  platforms            String[]          @default(["WEB"]) // ["WEB", "ANDROID", "IOS"]
+
+  // Advanced Rules
+  otaContribution      Float             @default(100)
+  supplierContribution Float             @default(0)
+  isStackable          Boolean           @default(false)
+  isAutoApply          Boolean           @default(false)
+
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  slabs                PromoCodeSlab[]
+  banners              PromoBanner[]
+  rules                PromoRule[]
+  usages               PromoUsage[]
+  bookings             Booking[]
+}
+
+model PromoCodeSlab {
+  id            String       @id @default(uuid())
+  promoId       String
+  fromAmount    Float
+  toAmount      Float
+  discountType  DiscountType
+  discountValue Float
+  promo         PromoCode    @relation(fields: [promoId], references: [id], onDelete: Cascade)
+}
+
+model PromoBanner {
+  id           String     @id @default(uuid())
+  imageUrl     String
+  mobileImageUrl String?
+  title        String
+  subtitle     String?
+  promoCodeId  String?
+  ctaText      String?    @default("Book Now")
+  redirectUrl  String?
+  displayOrder Int        @default(0)
+  startDate    DateTime
+  endDate      DateTime
+  isActive     Boolean    @default(true)
+  deviceVisibility String[] @default(["ALL"]) // ["WEB", "MOBILE", "ALL"]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  promo        PromoCode? @relation(fields: [promoCodeId], references: [id])
+}
+
+model PromoRule {
+  id               String    @id @default(uuid())
+  promoCodeId      String
+  name             String
+  conditions       Json      // Nested logic: { field, operator, value, joiner }
+  priority         Int       @default(0)
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  promo            PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+}
+
+model PromoUsage {
+  id             String    @id @default(uuid())
+  userId         String
+  promoCodeId    String
+  bookingId      String
+  discountAmount Float
+  metadata       Json?     // { platform, ip, deviceId, etc }
+  createdAt      DateTime  @default(now())
+  promo          PromoCode @relation(fields: [promoCodeId], references: [id])
+}
+
+enum PromoVisibility {
+  PUBLIC
+  PRIVATE
+  HIDDEN
+}
+
+model leads {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  phone              String
+  vehicle_preference String?
+  from_location      String?
+  flight_required    String?
+  travel_date        String?
+  date_flexible      String?
+  rooms_guests       String?
+  package            String?
+  status             String?   @default("New")
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)], map: "idx_leads_created_at")
+}
+
+model push_subscriptions {
+  id           Int       @id @default(autoincrement())
+  subscription Json?
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+}
+
+enum MarkupType {
+  FLAT
+  PERCENTAGE
+}
+
+enum SectorType {
+  DOMESTIC
+  INTERNATIONAL
+  ALL
+}
+
+enum SupplierType {
+  GDS
+  LCC
+  NDC
+  MANUAL
+  ALL
+}
+
+enum FeeType {
+  PER_PAX
+  PER_PNR
+  PERCENTAGE
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  AGENT
+}
+
+enum Provider {
+  LOCAL
+  GOOGLE
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  TICKETING_AGENT
+  SUPPORT
+  FINANCE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  PENDING_APPROVAL
+  BOOKED
+  TICKET_PENDING
+  TICKETED
+  FAILED
+  VOIDED
+  REFUND_IN_PROGRESS
+  REFUNDED
+  REISSUED
+}
+
+enum PaymentStatus {
+  INITIATED
+  SUCCESS
+  FAILED
+  EXPIRED
+  REFUNDED
+  REFUND_PENDING
+}
+
+enum CancelStatus {
+  NONE
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum TicketType {
+  GENERAL
+  CANCELLATION
+  REFUND
+  RESCHEDULE
+  NAME_CORRECTION
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum LedgerType {
+  CREDIT_CUSTOMER_PAYMENT
+  DEBIT_SUPPLIER_PAYMENT
+  DEBIT_CUSTOMER_REFUND
+  CREDIT_COMMISSION
+}
+
+enum DiscountType {
+  FLAT
+  PERCENTAGE
+}
+
+model FlightFareCache {
+  id            String   @id @default(uuid())
+  origin        String
+  destination   String
+  departureDate DateTime
+  airline       String?
+  cabin         String?
+  lowestFare    Float
+  currency      String   @default("INR")
+  supplier      String?
+  updatedAt     DateTime @default(now()) @updatedAt
+  expiresAt     DateTime
+
+  @@unique([origin, destination, departureDate, cabin])
+  @@index([origin, destination, departureDate])
+}

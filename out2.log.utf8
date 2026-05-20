@@ -1,0 +1,27 @@
+﻿[dotenv@17.3.1] injecting env (20) from .env -- tip: ΓÜÖ∩╕Å  enable debug logging with { debug: true }
+Token obtained
+Testing with currencyCode=INR...
+INR Test Status: 500
+{
+  errors: [
+    {
+      code: 38189,
+      title: 'Internal error',
+      detail: 'An internal error occurred, please contact your administrator',
+      status: 500
+    }
+  ]
+}
+
+Testing without currencyCode...
+No CurrencyCode Test Status: 500
+{
+  errors: [
+    {
+      code: 38189,
+      title: 'Internal error',
+      detail: 'An internal error occurred, please contact your administrator',
+      status: 500
+    }
+  ]
+}

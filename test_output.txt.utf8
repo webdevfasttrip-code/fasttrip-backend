@@ -1,0 +1,21 @@
+﻿--- 1. Testing Enriched Search (POST /search) ---
+SUCCESS: Enriched Result Found: {
+  airline: 'Air India Limited',
+  logo: 'https://d39ferq6cuvala.cloudfront.net/AI.png',
+  originCity: 'New Delhi',
+  destinationCity: 'Mumbai',
+  originAirport: 'Indira Gandhi International Airport'
+}
+
+Γ£à VERIFIED: Search Enrichment maps codes to names/logos.
+
+--- 2. Testing Airport Autocomplete (GET /search/airports?q=del) ---
+SUCCESS: Found 10 matches for "del".
+Top Match: {
+  iata: 'ADL',
+  name: 'Adelaide International Airport',
+  city: 'Adelaide',
+  country: 'AU'
+}
+
+Γ£à VERIFIED: Airport autocomplete is functional.

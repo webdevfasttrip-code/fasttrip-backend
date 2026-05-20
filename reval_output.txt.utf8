@@ -1,0 +1,17 @@
+﻿--- 1. Searching for Flights ---
+Testing Revalidation for: Air India Limited (1)
+
+--- 2. Revalidating Offer (POST /search/revalidate) ---
+SUCCESS: Revalidation Complete!
+Fare Options: [
+  {
+    "type": "STANDARD",
+    "refundable": true,
+    "includedBaggage": "15KG",
+    "price": 9079,
+    "currency": "INR"
+  }
+]
+Add-ons found: { baggage: 0, meals: 0, seats: 0 }
+
+Γ£à PHASE 3 VERIFIED: Revalidation returns normalized fare & add-ons

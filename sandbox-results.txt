@@ -1,0 +1,41 @@
+Token obtained
+
+Testing DEL -> BOM on 2026-05-14... (currency INR)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing DEL -> BOM on 2026-05-14... (no currency)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing LHR -> JFK on 2026-05-14... (currency INR)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing LHR -> JFK on 2026-05-14... (no currency)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing BKK -> SYD on 2026-05-14... (currency INR)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing BKK -> SYD on 2026-05-14... (no currency)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing MAD -> CDG on 2026-05-14... (currency INR)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing MAD -> CDG on 2026-05-14... (no currency)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing DEL -> GAU on 2026-06-13... (currency INR)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}
+
+Testing DEL -> GAU on 2026-06-13... (no currency)
+Status: 500
+{"errors":[{"code":38189,"title":"Internal error","detail":"An internal error occurred, please contact your administrator","status":500}]}

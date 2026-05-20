@@ -1,0 +1,40 @@
+﻿node.exe : Loaded Prisma config 
+from prisma.config.ts.
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" "C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo          : NotS 
+   pecified: (Loaded Prisma c...i  
+  sma.config.ts.:String) [], Rem   
+ oteException
+    + FullyQualifiedErrorId : Nati 
+   veCommandError
+ 
+
+Prisma config detected, skipping 
+environment variable loading.
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-blue-scene-a1ivqho2-pooler.ap-southeast-1.aws.neon.tech"
+Error: ERROR: type "Role" already 
+exists
+   0: sql_schema_connector::apply_m
+igration::migration_step
+           with 
+step=CreateEnum(EnumId(2))
+             at schema-engine\conne
+ctors\sql-schema-connector\src\appl
+y_migration.rs:28
+   1: sql_schema_connector::apply_m
+igration::apply_migration
+             at schema-engine\conne
+ctors\sql-schema-connector\src\appl
+y_migration.rs:11
+   2: 
+schema_core::state::SchemaPush
+             at 
+schema-engine\core\src\state.rs:545
+
