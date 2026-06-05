@@ -14,6 +14,7 @@ import { UsersModule } from './users/users.module';
 import { PromoModule } from './promo/promo.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { VisaModule } from './visa/visa.module';
+import { PassportModule } from './passport/passport.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { VisaModule } from './visa/visa.module';
     PromoModule,
     RevenueModule,
     VisaModule,
+    PassportModule,
   ],
 })
 export class AppModule { }

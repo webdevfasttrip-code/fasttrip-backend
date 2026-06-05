@@ -132,7 +132,7 @@ export class VisaService {
           seoContent: true,
         },
       });
-    });
+    }, { timeout: 30000 });
   }
 
   async deleteCountry(id: string) {

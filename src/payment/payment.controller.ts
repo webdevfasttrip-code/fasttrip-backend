@@ -18,6 +18,13 @@ export class PaymentController {
         private readonly razorpayService: RazorpayService,
     ) { }
 
+    @Post('visa-order')
+    @ApiOperation({ summary: 'Create generic Razorpay Order for Visa' })
+    async createVisaOrder(@Body() body: { amount: number }) {
+        const order = await this.razorpayService.createOrder(body.amount, `visa_${Date.now()}`);
+        return { orderId: order.id, amount: order.amount, currency: order.currency };
+    }
+
     @Post('verify')
     @ApiOperation({ summary: 'Verify Razorpay Payment' })
     async verifyPayment(@Body() body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string; bookingRef: string }) {

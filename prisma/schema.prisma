@@ -644,6 +644,7 @@ model VisaCountry {
   seoTitle         String?
   seoDescription   String?
   metaKeywords     String?
+  formFields       Json?
   visaType         String?
   processingTime   String?
   stayDuration     String?
@@ -675,6 +676,9 @@ model VisaPlan {
   visaFee        Float
   serviceFee     Float
   totalFee       Float
+  childVisaFee   Float       @default(0)
+  childServiceFee Float      @default(0)
+  childTotalFee  Float       @default(0)
   processingDays Int?
   featured       Boolean     @default(false)
   active         Boolean     @default(true)

@@ -45,6 +45,18 @@ export class CreateVisaPlanDto {
 
   @IsOptional()
   @IsNumber()
+  childVisaFee?: number;
+
+  @IsOptional()
+  @IsNumber()
+  childServiceFee?: number;
+
+  @IsOptional()
+  @IsNumber()
+  childTotalFee?: number;
+
+  @IsOptional()
+  @IsNumber()
   processingDays?: number;
 
   @IsOptional()
@@ -155,6 +167,9 @@ export class CreateVisaCountryDto {
   @IsOptional()
   @IsString()
   metaKeywords?: string;
+
+  @IsOptional()
+  formFields?: any;
 
   @IsOptional()
   @IsString()
