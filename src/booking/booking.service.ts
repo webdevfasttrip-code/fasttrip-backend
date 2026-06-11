@@ -297,6 +297,7 @@ export class BookingService {
     paymentId: string;
     signature: string;
     orderId: string;
+    paymentMode?: string;
   }) {
     const booking = await this.prisma.booking.findFirst({
       where: { paymentOrderId: paymentData.orderId } as any,
@@ -321,6 +322,26 @@ export class BookingService {
     // For MakeVoyage, pricingSnapshot loses referenceId, flightId etc. 
     // We must use the original raw data from selectedFareOption or selectedFlightData.
     const supplierName = ((booking as any).supplier || 'AMADEUS').toUpperCase();
+    
+    // --- BYPASS FOR VISA BOOKINGS ---
+    if (supplierName === 'VISA') {
+        this.logger.log(`Visa booking payment confirmed. Skipping flight initiation for ${booking.bookingRef}`);
+        const confirmedVisa = await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+                bookingStatus: 'CONFIRMED',
+                paymentStatus: 'SUCCESS',
+                paymentId: paymentData.paymentId,
+                paymentSignature: paymentData.signature,
+                paymentMode: paymentData.paymentMode || 'ONLINE',
+                paidAt: new Date(),
+                ticketNumber: `VISA-${paymentData.orderId.slice(-6)}`,
+            } as any
+        });
+        return confirmedVisa;
+    }
+    // --------------------------------
+
     if (supplierName === 'MAKEVOYAGE' || supplierName === 'MVFD' || supplierName === 'FTSPECIAL') {
         const fareOption = booking.selectedFareOption as any;
         const flightData = booking.selectedFlightData as any;
@@ -365,7 +386,7 @@ export class BookingService {
     }
 
     // 2. Initiate Supplier Booking
-    let providerPnr = '';
+    let providerPnr: string | null = '';
     let initiateRes: any = null;
     try {
         const supplier = (booking as any).supplier || 'AMADEUS';
@@ -385,15 +406,11 @@ export class BookingService {
         
         providerPnr = (Array.isArray(initiateRes.pnr) && initiateRes.pnr.length > 0) 
             ? initiateRes.pnr[0]?.pnr 
-            : (initiateRes.pnr || initiateRes.bookingRef);
+            : initiateRes.pnr;
             
-        // Fallback to bookingRef if PNR is somehow an empty string
-        if (!providerPnr || typeof providerPnr === 'object') {
-             providerPnr = initiateRes.bookingRef;
-        }
-
-        if (!providerPnr) {
-            throw new Error('No PNR received from supplier');
+        // If providerPnr is null or an empty string, we let it be null
+        if (typeof providerPnr === 'object' || !providerPnr) {
+             providerPnr = null;
         }
     } catch (initiateErr) {
         this.logger.error(`Supplier Initiation Error: ${initiateErr.message}`);
@@ -584,6 +601,13 @@ export class BookingService {
         discountAmount: 0
       },
       include: { promo: true }
+    });
+  }
+
+  async updateContactInfo(bookingId: string, email: string, phone: string) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { contactEmail: email, contactPhone: phone }
     });
   }
 }

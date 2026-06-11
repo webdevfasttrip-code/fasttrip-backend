@@ -5,7 +5,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { User } from '@prisma/client';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
-@Controller('users')
+@Controller({
+  path: 'users',
+  version: '1'
+})
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

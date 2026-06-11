@@ -145,12 +145,13 @@ export class AdminService {
         };
     }
 
-    async getBookings(filters: { status?: BookingStatus, cancelStatus?: CancelStatus, search?: string, page?: number, limit?: number }) {
-        const { status, cancelStatus, search, page = 1, limit = 10 } = filters;
+    async getBookings(filters: { status?: BookingStatus, cancelStatus?: CancelStatus, search?: string, supplier?: string, page?: number, limit?: number }) {
+        const { status, cancelStatus, search, supplier, page = 1, limit = 10 } = filters;
         
         let where: any = {};
         if (status) where.bookingStatus = status;
         if (cancelStatus) where.cancelStatus = cancelStatus;
+        if (supplier) where.supplier = supplier;
         
         if (search) {
             where.OR = [
@@ -208,6 +209,36 @@ export class AdminService {
         }
 
         return booking;
+    }
+
+    async updateBookingStatus(id: string, status: any) {
+        return this.prisma.booking.update({
+            where: { id },
+            data: { bookingStatus: status }
+        });
+    }
+
+    async updateVisaStatus(id: string, visaStatus: string, remarks?: string) {
+        return this.prisma.$transaction(async (tx) => {
+            const updated = await tx.booking.update({
+                where: { id },
+                data: { 
+                    visaStatus,
+                    remarks: remarks !== undefined ? remarks : undefined
+                }
+            });
+
+            await tx.bookingLog.create({
+                data: {
+                    bookingId: id,
+                    action: 'VISA_STATUS_UPDATE',
+                    description: `Visa status updated to: ${visaStatus}. Remarks: ${remarks || 'None'}`,
+                    performedBy: 'ADMIN'
+                }
+            });
+
+            return updated;
+        });
     }
 
     async approveCancel(id: string) {

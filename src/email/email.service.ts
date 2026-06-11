@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import puppeteer from 'puppeteer';
 
 @Injectable()
 export class EmailService {
@@ -8,44 +9,49 @@ export class EmailService {
 
   constructor() {
     this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: false, // true for 465, false for other ports
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '465', 10),
+      secure: process.env.EMAIL_PORT === '465', // true for 465, false for other ports
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
       },
     });
   }
 
-  async sendETicketEmail(to: string, bookingRef: string, name: string, pnr: string) {
-    const htmlContent = `
-      <div style="font-family: sans-serif; max-w-[600px]; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
-        <div style="background-color: #6A39E0; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-             <h1 style="color: white; margin: 0;">FastTrip</h1>
-        </div>
-        <div style="padding: 20px;">
-             <h2>Booking Confirmed!</h2>
-             <p>Hi ${name},</p>
-             <p>Your booking <strong>${bookingRef}</strong> has been confirmed securely.</p>
-             <div style="background-color: #f7f7f7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                 <h3 style="margin-top: 0; color: #6A39E0;">E-Ticket Details</h3>
-                 <p><strong>Airline PNR:</strong> ${pnr}</p>
-             </div>
-             <p>Log in to your account at FastTrip to download the official PDF E-Ticket or manage your itinerary.</p>
-             <p>Happy Travels,<br>The FastTrip Team</p>
-        </div>
-      </div>
-    `;
+  async sendETicketEmail(to: string, pnr: string, pdfHtmlContent: string, emailHtmlContent: string) {
+    const adminEmail = process.env.EMAIL_USER || 'fasttrip.in@gmail.com';
 
     try {
+        let pdfBuffer: Buffer;
+        try {
+            const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+            const page = await browser.newPage();
+            await page.setContent(pdfHtmlContent, { waitUntil: 'load', timeout: 10000 });
+            const uint8ArrayPdf = await page.pdf({ format: 'A4', printBackground: true });
+            pdfBuffer = Buffer.from(uint8ArrayPdf);
+            await browser.close();
+        } catch (pdfErr) {
+            this.logger.error(`Failed to generate PDF for ${pnr}: ${pdfErr.message}`);
+            // Fallback to sending HTML as attachment if PDF fails
+            pdfBuffer = Buffer.from(pdfHtmlContent, 'utf-8');
+        }
+
         const info = await this.transporter.sendMail({
-          from: `"FastTrip Support" <${process.env.SMTP_USER || 'noreply@fasttrip.com'}>`, // sender address
-          to, // list of receivers
-          subject: `FastTrip E-Ticket Confirmed | PNR: ${pnr}`, // Subject line
-          html: htmlContent, // html body
+          from: process.env.EMAIL_FROM || `"FastTrip Support" <${adminEmail}>`,
+          to, // Customer's email
+          cc: adminEmail, // CC to our own email address for record keeping
+          subject: `Ticket Confirmation - Fast Trip | PNR: ${pnr}`, // Subject line
+          html: emailHtmlContent, // Full E-Ticket HTML as the email body!
+          attachments: [
+            {
+                filename: `Ticket-${pnr}.pdf`,
+                content: pdfBuffer,
+                contentType: 'application/pdf'
+            }
+          ]
         });
-        this.logger.log(`E-Ticket sent: ${info.messageId} to ${to}`);
+        this.logger.log(`E-Ticket sent: ${info.messageId} to ${to} and CC to ${adminEmail}`);
     } catch(err) {
         this.logger.error(`Error sending E-Ticket to ${to}: ${err.message}`);
     }

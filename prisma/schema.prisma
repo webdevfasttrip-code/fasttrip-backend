@@ -28,6 +28,7 @@ model User {
   searchHistory   SearchHistory[]
   supportTickets  SupportTicket[]
   activityLogs    UserActivity[]
+  visaApplications VisaApplication[]
 }
 
 model AdminUser {
@@ -213,6 +214,10 @@ model Booking {
   updatedAt          DateTime        @default(now()) @updatedAt
   supplier           String?
   supplierBookingRef String?
+  visaStatus         String?         @default("New Inquiry")
+  remarks            String?
+  paymentMode        String?
+  visaDocuments      Json?
   assignedTo         AdminUser?      @relation("AgentAssignments", fields: [assignedToId], references: [id])
   promo              PromoCode?      @relation(fields: [promoCodeId], references: [id])
   user               User            @relation(fields: [userId], references: [id])
@@ -307,6 +312,8 @@ model Passenger {
   ticketNumber String?
   type         String    @default("ADT")
   title        String?
+  passportNumber String?
+  nationality    String?
   booking      Booking   @relation(fields: [bookingId], references: [id])
 }
 
@@ -671,6 +678,7 @@ model VisaCountry {
   requirements     VisaRequirement[]
   faqs             VisaFAQ[]
   seoContent       VisaSEOContent[]
+  applications     VisaApplication[]
 
   @@map("visa_countries")
 }
@@ -697,6 +705,7 @@ model VisaPlan {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   country        VisaCountry @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  applications   VisaApplication[]
 
   @@map("visa_plans")
 }
@@ -744,3 +753,48 @@ model VisaSEOContent {
   @@map("visa_seo_contents")
 }
 
+model VisaApplication {
+  id              String         @id @default(uuid())
+  userId          String
+  referenceId     String         @unique
+  countryId       String
+  planId          String
+  status          VisaStatus     @default(SUBMITTED)
+  totalAmount     Float
+  visaFee         Float
+  serviceFee      Float
+  contactEmail    String
+  contactPhone    String
+  paymentId       String?
+  paymentOrderId  String?
+  appliedAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            User           @relation(fields: [userId], references: [id])
+  country         VisaCountry    @relation(fields: [countryId], references: [id])
+  plan            VisaPlan       @relation(fields: [planId], references: [id])
+  travelers       VisaTraveler[]
+
+  @@map("visa_applications")
+}
+
+model VisaTraveler {
+  id                String          @id @default(uuid())
+  visaApplicationId String
+  firstName         String
+  lastName          String
+  passportNo        String
+  type              String          @default("ADT")
+  documents         Json?           
+  application       VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@map("visa_travelers")
+}
+
+enum VisaStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  PROCESSING
+  APPROVED
+  REJECTED
+}

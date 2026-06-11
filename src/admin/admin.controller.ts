@@ -42,10 +42,11 @@ export class AdminController {
         @Query('status') status?: BookingStatus,
         @Query('cancelStatus') cancelStatus?: CancelStatus,
         @Query('search') search?: string,
+        @Query('supplier') supplier?: string,
         @Query('page') page?: number,
         @Query('limit') limit?: number
     ) {
-        return this.adminService.getBookings({ status, cancelStatus, search, page: page ? Number(page) : undefined, limit: limit ? Number(limit): undefined });
+        return this.adminService.getBookings({ status, cancelStatus, search, supplier, page: page ? Number(page) : undefined, limit: limit ? Number(limit): undefined });
     }
 
     @Get('bookings/:id')
@@ -130,6 +131,20 @@ export class AdminController {
     @ApiOperation({ summary: 'List all support tickets' })
     async getSupportTickets() {
         return this.adminService.getSupportTickets();
+    }
+
+    @Patch('bookings/:id/status')
+    @Permissions('MANAGE_BOOKINGS')
+    @ApiOperation({ summary: 'Update booking status' })
+    async updateBookingStatus(@Param('id') id: string, @Body() data: { status: string }) {
+        return this.adminService.updateBookingStatus(id, data.status);
+    }
+
+    @Patch('bookings/:id/visa-status')
+    @Permissions('MANAGE_BOOKINGS')
+    @ApiOperation({ summary: 'Update visa status and remarks' })
+    async updateVisaStatus(@Param('id') id: string, @Body() data: { visaStatus: string, remarks?: string }) {
+        return this.adminService.updateVisaStatus(id, data.visaStatus, data.remarks);
     }
 
     @Patch('support/:id/status')

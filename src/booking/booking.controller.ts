@@ -15,6 +15,7 @@ import { TicketPdfService } from './ticket-pdf.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { ManageBookingDto } from './dto/manage-booking.dto';
 import { CancelRequestDto } from './dto/cancel-request.dto';
+import { EmailService } from '../email/email.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -28,7 +29,8 @@ import type { User } from '@prisma/client';
 export class BookingController {
   constructor(
     private bookingService: BookingService,
-    private ticketPdfService: TicketPdfService
+    private ticketPdfService: TicketPdfService,
+    private emailService: EmailService
   ) { }
 
   @Post()
@@ -135,22 +137,49 @@ export class BookingController {
   }
 
   @Get('ref/:bookingRef/ticket')
-  @ApiOperation({ summary: 'Download E-Ticket PDF' })
-  @ApiResponse({ status: 200, description: 'PDF Ticket' })
+  @ApiOperation({ summary: 'View E-Ticket HTML' })
+  @ApiResponse({ status: 200, description: 'HTML Ticket' })
   async downloadTicket(@Param('bookingRef') bookingRef: string, @Res() res: Response) {
     const booking = await this.bookingService.getBookingByRef(bookingRef);
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
 
-    const pdfBuffer = await this.ticketPdfService.generateTicketPdf(booking.id);
+    const htmlString = await this.ticketPdfService.generateTicketPdf(booking.id);
     
     res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="e-ticket-${booking.pnr || bookingRef}.pdf"`,
-      'Content-Length': pdfBuffer.length,
+      'Content-Type': 'text/html',
+      'Content-Length': Buffer.byteLength(htmlString, 'utf8').toString(),
     });
     
-    res.end(pdfBuffer);
+    res.end(htmlString);
+  }
+
+  @Post('ref/:bookingRef/ticket/resend')
+  @ApiOperation({ summary: 'Resend E-Ticket via Email' })
+  @ApiResponse({ status: 200, description: 'Ticket resent successfully' })
+  async resendTicket(
+    @Param('bookingRef') bookingRef: string,
+    @Body() body: { email: string, phone?: string }
+  ) {
+    const booking = await this.bookingService.getBookingByRef(bookingRef);
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (!body.email) {
+      throw new Error('Email is required');
+    }
+
+    const htmlString = await this.ticketPdfService.generateTicketPdf(booking.id);
+    const emailHtmlString = await this.ticketPdfService.generateTicketEmailHtml(booking.id);
+    
+    // Optionally update the booking with the new email/phone
+    if (body.email !== booking.contactEmail || body.phone !== booking.contactPhone) {
+        await this.bookingService.updateContactInfo(booking.id, body.email, body.phone || '');
+    }
+
+    await this.emailService.sendETicketEmail(body.email, booking.pnr || bookingRef, htmlString, emailHtmlString);
+    return { success: true, message: 'Ticket resent successfully' };
   }
 }

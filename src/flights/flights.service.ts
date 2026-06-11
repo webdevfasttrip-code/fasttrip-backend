@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import axios from 'axios';
+import * as https from 'https';
 import { Pool } from 'pg';
 import { SearchFlightDto } from './dto/search-flight.dto';
 import { FaresDto } from './dto/fares.dto';
@@ -146,7 +147,8 @@ export class FlightsService implements OnModuleInit {
                 headers: { 
                     'x-api-key': apiKey,
                     'Content-Type': 'application/json'
-                }
+                },
+                httpsAgent: new https.Agent({ rejectUnauthorized: false })
             });
             return data;
         } catch (err) {

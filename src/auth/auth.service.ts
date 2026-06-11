@@ -25,7 +25,7 @@ export class AuthService {
     this.transporter = nodemailer.createTransport({
       host: this.configService.get('EMAIL_HOST'),
       port: Number(this.configService.get('EMAIL_PORT')),
-      secure: false, // configure based on provider (e.g., true for port 465)
+      secure: Number(this.configService.get('EMAIL_PORT')) === 465,
       auth: {
         user: this.configService.get('EMAIL_USER'),
         pass: this.configService.get('EMAIL_PASS'),
@@ -56,6 +56,12 @@ export class AuthService {
     
     const verificationUrl = `http://localhost:5173/verify-email?token=${verificationToken}`;
     
+    // --- WORKAROUND FOR EMAIL SENDING FAILURE ---
+    console.log('\n=======================================');
+    console.log(`VERIFICATION LINK FOR ${user.email}:`);
+    console.log(verificationUrl);
+    console.log('=======================================\n');
+    
     try {
       await this.transporter.sendMail({
         from: this.configService.get('EMAIL_FROM'),
@@ -65,7 +71,7 @@ export class AuthService {
       });
       console.log(`Verification email sent to ${user.email}`);
     } catch (err) {
-      console.error('Failed to send verification email:', err);
+      console.error('Failed to send verification email (check Gmail security settings):', err.message);
     }
 
     return this.generateTokens(user.id, user.email, user.role);
@@ -179,6 +185,12 @@ export class AuthService {
     
     const resetUrl = `http://localhost:5173/reset-password?token=${resetToken}`;
     
+    // --- WORKAROUND FOR EMAIL SENDING FAILURE ---
+    console.log('\n=======================================');
+    console.log(`PASSWORD RESET LINK FOR ${email}:`);
+    console.log(resetUrl);
+    console.log('=======================================\n');
+    
     try {
       await this.transporter.sendMail({
         from: this.configService.get('EMAIL_FROM'),
@@ -188,7 +200,7 @@ export class AuthService {
       });
       console.log(`Password reset email sent to ${email}`);
     } catch (err) {
-      console.error('Failed to send password reset email:', err);
+      console.error('Failed to send password reset email (check Gmail security settings):', err.message);
     }
     
     return { message: 'If that email is registered, a reset link will be sent.' };

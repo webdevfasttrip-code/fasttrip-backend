@@ -58,6 +58,30 @@ export class SearchService {
                     Object.entries(standardized.airports).forEach(([code, data]) => {
                         airportMapAccumulator.set(code, data);
                     });
+                } else if (supplier.name.toUpperCase() === 'MVFD' || supplier.name.toUpperCase() === 'FTSPECIAL') {
+                    const mvfdResults = await this.mvfdProvider.search(dto);
+                    if (mvfdResults && mvfdResults.length > 0) {
+                        results.push(...mvfdResults);
+                        
+                        // Collect missing airport codes for MVFD flights to populate the airport map
+                        const airportCodesToFetch = new Set<string>();
+                        mvfdResults.forEach((flight: any) => {
+                            if (flight.meta?.origin) airportCodesToFetch.add(flight.meta.origin);
+                            if (flight.meta?.destination) airportCodesToFetch.add(flight.meta.destination);
+                            flight.meta?.segments?.forEach((seg: any) => {
+                                if (seg.from) airportCodesToFetch.add(seg.from);
+                                if (seg.to) airportCodesToFetch.add(seg.to);
+                            });
+                        });
+                        
+                        const missingCodes = Array.from(airportCodesToFetch).filter(code => !airportMapAccumulator.has(code));
+                        if (missingCodes.length > 0) {
+                            const dbAirports = await this.getAirportsByCodes(missingCodes);
+                            dbAirports.forEach((airport: any) => {
+                                airportMapAccumulator.set(airport.iataCode, airport);
+                            });
+                        }
+                    }
                 }
             } catch (error) {
                 console.error(`Search failed for supplier ${supplier.name}:`, error.message);

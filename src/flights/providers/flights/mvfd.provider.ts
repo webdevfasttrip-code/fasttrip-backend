@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import * as https from 'https';
 import { mapToMakeVoyageReviewRequest, mapMakeVoyageReviewResponse } from './adapters/review.adapter';
 import { mapToMakeVoyageBookingRequest, mapMakeVoyageBookingResponse } from './adapters/booking.adapter';
 import { mapToMakeVoyageGetDetailsRequest, mapMakeVoyageGetDetailsResponse } from './adapters/ticket.adapter';
@@ -57,7 +58,8 @@ export class MVFDProvider {
                 headers: { 
                     'x-api-key': apiKey,
                     'Content-Type': 'application/json'
-                }
+                },
+                httpsAgent: new https.Agent({ rejectUnauthorized: false })
             });
 
             if (searchRes.data?.code !== 200) {
@@ -290,7 +292,8 @@ export class MVFDProvider {
                 headers: { 
                     'x-api-key': apiKey,
                     'Content-Type': 'application/json'
-                }
+                },
+                httpsAgent: new https.Agent({ rejectUnauthorized: false })
             });
         } catch (err: any) {
             this.logger.error(`MVFD Price Review HTTP failed: ${err.message}`, err.response?.data);
@@ -332,7 +335,8 @@ export class MVFDProvider {
             headers: { 
                 'x-api-key': apiKey,
                 'Content-Type': 'application/json'
-            }
+            },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false })
         });
 
         if (response.data?.code !== 200) {
@@ -360,7 +364,8 @@ export class MVFDProvider {
             headers: { 
                 'x-api-key': apiKey,
                 'Content-Type': 'application/json'
-            }
+            },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false })
         });
 
         if (response.data?.code !== 200) {
@@ -383,7 +388,8 @@ export class MVFDProvider {
             headers: { 
                 'x-api-key': apiKey,
                 'Content-Type': 'application/json'
-            }
+            },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false })
         });
 
         if (response.data?.code !== 200) {
@@ -403,7 +409,8 @@ export class MVFDProvider {
         }
 
         const response = await axios.get(`${baseUrl}/service/availableSectors`, {
-            headers: { 'x-api-key': apiKey }
+            headers: { 'x-api-key': apiKey },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false })
         });
 
         return response.data;

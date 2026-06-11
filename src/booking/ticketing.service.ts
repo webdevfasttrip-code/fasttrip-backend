@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { TicketPdfService } from './ticket-pdf.service';
 
 @Injectable()
 export class TicketingService {
@@ -8,7 +9,8 @@ export class TicketingService {
 
     constructor(
         private prisma: PrismaService,
-        private emailService: EmailService
+        private emailService: EmailService,
+        private ticketPdfService: TicketPdfService
     ) {}
 
     private generateTicketNumber(): string {
@@ -23,10 +25,11 @@ export class TicketingService {
         return `${randomPrefix}-${remaining}`;
     }
 
-    async issueTicket(bookingId: string, providerPnr: string, supplierRef?: string) {
+    async issueTicket(bookingId: string, providerPnr: string | null, supplierRef?: string) {
         this.logger.log(`Issuing ticket for Booking ID: ${bookingId} with PNR: ${providerPnr} (Supplier Ref: ${supplierRef || 'N/A'})`);
         
-        const ticketNumber = this.generateTicketNumber();
+        const isPnrValid = providerPnr && providerPnr.trim() !== '';
+        const ticketNumber = isPnrValid ? this.generateTicketNumber() : null;
         
         const booking = await this.prisma.booking.update({
             where: { id: bookingId },
@@ -34,21 +37,25 @@ export class TicketingService {
                 ticketNumber,
                 pnr: providerPnr,
                 supplierBookingRef: supplierRef, // Save the supplier's internal ID
-                ticketIssuedAt: new Date(),
-                bookingStatus: 'CONFIRMED'
+                ticketIssuedAt: isPnrValid ? new Date() : null,
+                bookingStatus: isPnrValid ? 'CONFIRMED' : 'TICKET_PENDING'
             },
             include: { passengers: true }
         });
 
-        // Trigger Email Asynchronously
-        if (booking.contactEmail && booking.passengers && booking.passengers.length > 0) {
-            const primaryPassenger = `${booking.passengers[0].firstName} ${booking.passengers[0].lastName}`;
-            this.emailService.sendETicketEmail(
-                booking.contactEmail, 
-                booking.bookingRef, 
-                primaryPassenger, 
-                providerPnr
-            ).catch(err => this.logger.error(`Failed to send e-ticket email: ${err.message}`));
+        // Trigger Email Asynchronously ONLY if PNR is generated
+        if (isPnrValid && booking.contactEmail && booking.passengers && booking.passengers.length > 0) {
+            Promise.all([
+                this.ticketPdfService.generateTicketPdf(booking.id),
+                this.ticketPdfService.generateTicketEmailHtml(booking.id)
+            ]).then(([htmlString, emailHtmlString]) => {
+                this.emailService.sendETicketEmail(
+                    booking.contactEmail as string, 
+                    providerPnr as string,
+                    htmlString,
+                    emailHtmlString
+                ).catch(err => this.logger.error(`Failed to send e-ticket email: ${err.message}`));
+            }).catch(err => this.logger.error(`Failed to generate HTML for email: ${err.message}`));
         }
 
         return booking;
