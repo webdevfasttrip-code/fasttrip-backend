@@ -229,7 +229,7 @@ export class SearchService {
                         ...(searchIatas.length > 0 ? [{ iataCode: { in: searchIatas } }] : [])
                     ],
                 },
-                take: 150,
+                take: 50,
             });
 
             if (candidates.length === 0) return [];
@@ -346,17 +346,6 @@ export class SearchService {
             throw new NotFoundException('Airport not found or missing coordinates');
         }
 
-        // Only fetch airports with valid coordinates
-        const airports = await this.prisma.airport.findMany({
-            where: {
-                latitude: { not: null },
-                longitude: { not: null },
-                iataCode: { not: null },
-                isSearchable: true,
-                airportType: { notIn: ['MILITARY', 'PRIVATE'] }
-            }
-        });
-
         const METRO_AIRPORTS = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX', 'DXB', 'BKK', 'SIN', 'LHR', 'JFK', 'CDG', 'NRT'];
         let radius = 100000;
         if (selectedAirport.isMajor || METRO_AIRPORTS.includes(selectedAirport.iataCode as string)) {
@@ -364,6 +353,23 @@ export class SearchService {
         } else if ((selectedAirport as any).airportType === 'REMOTE') {
             radius = 150000;
         }
+
+        const lat = selectedAirport.latitude;
+        const lon = selectedAirport.longitude;
+        const radiusInKm = radius / 1000;
+        const latDelta = radiusInKm / 111.045;
+        const lonDelta = radiusInKm / (111.045 * Math.cos(lat * (Math.PI / 180)));
+
+        // Only fetch airports within a rough bounding box
+        const airports = await this.prisma.airport.findMany({
+            where: {
+                latitude: { gte: lat - latDelta, lte: lat + latDelta },
+                longitude: { gte: lon - lonDelta, lte: lon + lonDelta },
+                iataCode: { not: null },
+                isSearchable: true,
+                airportType: { notIn: ['MILITARY', 'PRIVATE'] }
+            }
+        });
 
         const CITY_GROUPS: Record<string, string[]> = {
             "BKK": ["BKK", "DMK"],
