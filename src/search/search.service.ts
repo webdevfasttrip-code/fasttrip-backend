@@ -218,7 +218,18 @@ export class SearchService {
             if (qUpper.length === 3) searchIatas.push(qUpper);
 
             // STEP 1 - Query Candidate Airports
-            const candidates = await this.prisma.airport.findMany({
+            console.time(`DB_${searchTerm}`);
+            
+            // Guarantee exact IATA match is always included if searching a 3-letter code
+            const exactMatches = qUpper.length === 3 ? await this.prisma.airport.findMany({
+                where: { 
+                    iataCode: qUpper, 
+                    isSearchable: true, 
+                    airportType: { notIn: ['MILITARY', 'PRIVATE'] } 
+                }
+            }) : [];
+
+            const otherCandidates = await this.prisma.airport.findMany({
                 where: {
                     isSearchable: true,
                     airportType: { notIn: ['MILITARY', 'PRIVATE'] },
@@ -228,13 +239,18 @@ export class SearchService {
                         { airportName: { contains: searchTerm, mode: 'insensitive' } },
                         ...(searchIatas.length > 0 ? [{ iataCode: { in: searchIatas } }] : [])
                     ],
+                    ...(exactMatches.length > 0 ? { iataCode: { not: qUpper } } : {})
                 },
                 take: 50,
             });
+            console.timeEnd(`DB_${searchTerm}`);
+
+            const candidates = [...exactMatches, ...otherCandidates];
 
             if (candidates.length === 0) return [];
 
             // STEP 2 - Calculate Weighted Priority Score
+            console.time(`Ranking_${searchTerm}`);
             const scoredAirports = candidates.map(airport => {
                 let score = 0;
                 const iata = (airport.iataCode || '').toUpperCase();
@@ -252,41 +268,29 @@ export class SearchService {
                 }
 
                 // Tier 1: User Intent (Exact City or Alias Match)
-                if (city === qUpper) score += 5000;
-                if (isAliasMatch) score += 5000;
+                if (city === qUpper) score += 8000;
+                if (isAliasMatch) score += 8000;
 
-                // 3. Exact IATA Match
+                // Exact IATA Match
                 if (iata === qUpper) score += 10000;
 
-                // 4. Starts With City
-                if (city.startsWith(qUpper) && city !== qUpper) score += 1200;
+                // IATA Starts With
+                if (iata.startsWith(qUpper) && iata !== qUpper) score += 5000;
+
+                // City Starts With
+                if (city.startsWith(qUpper) && city !== qUpper) score += 3000;
                 
-                // 5. Airport Name Contains
-                if (name.includes(qUpper)) score += 800;
+                // Airport Name Contains
+                if (name.includes(qUpper)) score += 1000;
 
-                // 6. Starts With IATA
-                if (iata.startsWith(qUpper) && iata !== qUpper) score += 700;
+                // Major Airport
+                if (airport.isMajor) score += 500;
 
-                // Tier 2: Country / Regional Boost
+                // Country Priority
                 const priorityCountries = ['IN', 'BT', 'BD', 'NP'];
-                if (airport.isoCountry === 'IN') {
-                    score += 5000;
-                } else if (airport.isoCountry && priorityCountries.includes(airport.isoCountry)) {
-                    score += 2000;
+                if (airport.isoCountry && priorityCountries.includes(airport.isoCountry)) {
+                    score += 300;
                 }
-
-                // Tier 3: Popular Destination Boost
-                const topTier = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX'];
-                const secondTier = ['DXB', 'SIN', 'BKK'];
-                
-                if (topTier.includes(iata)) score += 2000;
-                else if (secondTier.includes(iata)) score += 1500;
-
-                // 8. Major Airport Boost
-                if (airport.isMajor) score += 200;
-
-                // 9. DB Priority Score Boost
-                score += (airport.priorityScore || 0);
 
                 return { ...airport, score };
             });
@@ -296,6 +300,7 @@ export class SearchService {
 
             // STEP 4 - Slice to requested limit
             const topAirports = scoredAirports.slice(0, limit);
+            console.timeEnd(`Ranking_${searchTerm}`);
 
             const mappedAirports = topAirports.map(a => ({
                 ...a,
@@ -311,12 +316,15 @@ export class SearchService {
                 let otherAirports = mappedAirports.slice(1);
 
                 try {
-                    const nearbyRes = await this.getNearbyAirports(mainAirport.iata_code as string);
-                    if (nearbyRes && nearbyRes.nearbyAirports) {
-                        nearbyAirports = nearbyRes.nearbyAirports;
-                        const nearbyIatas = nearbyAirports.map((n: any) => n.iata_code);
-                        otherAirports = otherAirports.filter(a => !nearbyIatas.includes(a.iata_code));
-                    }
+                    // console.time(`Nearby_${searchTerm}`);
+                    // const nearbyRes = await this.getNearbyAirports(mainAirport.iata_code as string);
+                    // console.timeEnd(`Nearby_${searchTerm}`);
+                    
+                    // if (nearbyRes && nearbyRes.nearbyAirports) {
+                    //     nearbyAirports = nearbyRes.nearbyAirports;
+                    //     const nearbyIatas = nearbyAirports.map((n: any) => n.iata_code);
+                    //     otherAirports = otherAirports.filter(a => !nearbyIatas.includes(a.iata_code));
+                    // }
                 } catch (e) {
                     // Ignore errors fetching nearby airports
                 }
@@ -335,8 +343,17 @@ export class SearchService {
         }
     }
 
+    // Cache nearby airports to improve performance
+    private nearbyCache = new Map<string, { data: any, expiry: number }>();
+
     async getNearbyAirports(iataCode: string) {
         if (!iataCode) return null;
+        
+        const now = Date.now();
+        const cached = this.nearbyCache.get(iataCode);
+        if (cached && cached.expiry > now) {
+            return cached.data;
+        }
         
         const selectedAirport = await this.prisma.airport.findUnique({
             where: { iataCode: iataCode.toUpperCase() }
@@ -428,7 +445,7 @@ export class SearchService {
             .sort((a, b) => a.distanceKm - b.distanceKm)
             .slice(0, 5); // Maximum 5 nearby airports
 
-        return {
+        const result = {
             mainAirport: {
                 ...selectedAirport,
                 airport_name: selectedAirport.airportName,
@@ -438,6 +455,9 @@ export class SearchService {
             },
             nearbyAirports: nearby
         };
+
+        this.nearbyCache.set(iataCode, { data: result, expiry: now + 24 * 60 * 60 * 1000 });
+        return result;
     }
 
     async getAirportsByCodes(codes: string[]) {
