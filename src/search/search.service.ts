@@ -178,14 +178,46 @@ export class SearchService {
         throw new Error(`Unsupported Supplier: ${supplierName}`);
     }
 
+    private readonly ALIAS_MAP: Record<string, string[]> = {
+        "goa": ["GOI", "GOX"],
+        "delhi": ["DEL"],
+        "new delhi": ["DEL"],
+        "mumbai": ["BOM"],
+        "bombay": ["BOM"],
+        "bangalore": ["BLR"],
+        "bengaluru": ["BLR"],
+        "chennai": ["MAA"],
+        "madras": ["MAA"],
+        "hyderabad": ["HYD"],
+        "kolkata": ["CCU"],
+        "calcutta": ["CCU"],
+        "dubai": ["DXB"],
+        "bangkok": ["BKK"],
+        "singapore": ["SIN"],
+        "pune": ["PNQ"],
+        "kochi": ["COK"],
+        "cochin": ["COK"],
+        "ahmedabad": ["AMD"]
+    };
+
     async searchAirports(query: SearchAirportDto) {
         const { q, limit = 10 } = query;
         if (!q || q.trim().length < 2) return [];
         const searchTerm = q.trim();
         const qUpper = searchTerm.toUpperCase();
+        const qLower = searchTerm.toLowerCase();
 
         try {
-            // STEP 1 - Query Candidate Airports (Take more to ensure we get the best matches before sorting)
+            // Check for aliases
+            const searchIatas: string[] = [];
+            Object.entries(this.ALIAS_MAP).forEach(([alias, iatas]) => {
+                if (alias.startsWith(qLower) || qLower.startsWith(alias)) {
+                    searchIatas.push(...iatas);
+                }
+            });
+            if (qUpper.length === 3) searchIatas.push(qUpper);
+
+            // STEP 1 - Query Candidate Airports
             const candidates = await this.prisma.airport.findMany({
                 where: {
                     isSearchable: true,
@@ -194,6 +226,7 @@ export class SearchService {
                         { iataCode: { startsWith: searchTerm, mode: 'insensitive' } },
                         { city: { startsWith: searchTerm, mode: 'insensitive' } },
                         { airportName: { contains: searchTerm, mode: 'insensitive' } },
+                        ...(searchIatas.length > 0 ? [{ iataCode: { in: searchIatas } }] : [])
                     ],
                 },
                 take: 150,
@@ -208,24 +241,46 @@ export class SearchService {
                 const city = (airport.city || '').toUpperCase();
                 const name = (airport.airportName || '').toUpperCase();
 
-                // 1. Exact IATA Match (Highest Priority)
-                if (iata === qUpper) score += 1000;
-                // 2. Exact City Match
-                else if (city === qUpper) score += 800;
-                // 3. Starts With IATA
-                else if (iata.startsWith(qUpper)) score += 700;
+                let isAliasMatch = false;
+                for (const [alias, iatas] of Object.entries(this.ALIAS_MAP)) {
+                    if (alias === qLower && iatas.includes(iata)) {
+                        isAliasMatch = true;
+                        break;
+                    } else if (alias.startsWith(qLower) && iatas.includes(iata)) {
+                        isAliasMatch = true;
+                    }
+                }
+
+                // Tier 1: User Intent (Exact City or Alias Match)
+                if (city === qUpper) score += 5000;
+                if (isAliasMatch) score += 5000;
+
+                // 3. Exact IATA Match
+                if (iata === qUpper) score += 1500;
+
                 // 4. Starts With City
-                else if (city.startsWith(qUpper)) score += 600;
+                if (city.startsWith(qUpper) && city !== qUpper) score += 1200;
+                
                 // 5. Airport Name Contains
-                else if (name.includes(qUpper)) score += 400;
+                if (name.includes(qUpper)) score += 800;
 
-                // 6. Country Boost (India)
-                if (airport.isoCountry === 'IN') score += 300;
+                // 6. Starts With IATA
+                if (iata.startsWith(qUpper) && iata !== qUpper) score += 700;
 
-                // 7. Major Airport Boost
+                // Tier 2: India Boost
+                if (airport.isoCountry === 'IN') score += 2500;
+
+                // Tier 3: Popular Destination Boost
+                const topTier = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX'];
+                const secondTier = ['DXB', 'SIN', 'BKK'];
+                
+                if (topTier.includes(iata)) score += 2000;
+                else if (secondTier.includes(iata)) score += 1500;
+
+                // 8. Major Airport Boost
                 if (airport.isMajor) score += 200;
 
-                // 8. DB Priority Score Boost
+                // 9. DB Priority Score Boost
                 score += (airport.priorityScore || 0);
 
                 return { ...airport, score };
@@ -237,63 +292,13 @@ export class SearchService {
             // STEP 4 - Slice to requested limit
             const topAirports = scoredAirports.slice(0, limit);
 
-            const formattedAirports = topAirports.map(a => ({
+            return topAirports.map(a => ({
                 ...a,
                 airport_name: a.airportName,
                 iata_code: a.iataCode,
                 iso_country: a.isoCountry,
                 iso_region: a.isoRegion
             }));
-
-            // Attempt to fetch nearby airports if we have a very strong top match
-            const mainAirport = formattedAirports[0];
-            if (mainAirport.latitude && mainAirport.longitude) {
-                // 2. Load all searchable airports with valid coordinates to calculate distance
-                const allAirports = await this.prisma.airport.findMany({
-                    where: {
-                        latitude: { not: null },
-                        longitude: { not: null },
-                        isSearchable: true,
-                        showInNearby: true,
-                        airportType: {
-                            notIn: ['MILITARY', 'PRIVATE']
-                        }
-                    }
-                });
-
-                const nearby = allAirports.filter(a => {
-                    if (formattedAirports.some(existing => existing.iata_code === a.iataCode)) return false;
-                    const dist = getDistance(
-                        { latitude: mainAirport.latitude!, longitude: mainAirport.longitude! },
-                        { latitude: a.latitude!, longitude: a.longitude! }
-                    );
-                    const radius = mainAirport.isMajor ? 80000 : 150000; // 80km for major, 150km for smaller
-                    return dist <= radius;
-                }).map(a => {
-                    const dist = getDistance(
-                        { latitude: mainAirport.latitude!, longitude: mainAirport.longitude! },
-                        { latitude: a.latitude!, longitude: a.longitude! }
-                    );
-                    return {
-                        ...a,
-                        airport_name: a.airportName,
-                        iata_code: a.iataCode,
-                        iso_country: a.isoCountry,
-                        iso_region: a.isoRegion,
-                        distanceKm: Math.round(dist / 1000),
-                        isNearby: true,
-                        mainCity: mainAirport.city || mainAirport.iata_code
-                    };
-                }).sort((a,b) => a.distanceKm - b.distanceKm);
-
-                return {
-                    mainAirport: mainAirport,
-                    otherAirports: formattedAirports.slice(1),
-                    nearbyAirports: nearby.slice(0, 5) // Send top 5 nearby
-                };
-            }
-
-            return formattedAirports;
         } catch (error) {
             return [];
         }
@@ -321,16 +326,32 @@ export class SearchService {
             }
         });
 
+        const METRO_AIRPORTS = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX', 'DXB', 'BKK', 'SIN'];
+        const radius = METRO_AIRPORTS.includes(selectedAirport.iataCode) ? 200000 : 100000;
+
+        const CITY_GROUPS: Record<string, string[]> = {
+            "DEL": ["DEL", "HDO", "DXN"],
+            "BOM": ["BOM", "PNQ"],
+            "GOI": ["GOI", "GOX"],
+            "GOX": ["GOI", "GOX"],
+            "LHR": ["LHR", "LGW", "STN", "LTN"]
+        };
+        const group = CITY_GROUPS[selectedAirport.iataCode] || [];
+
         const nearby = airports
             .filter((airport) => {
                 if (airport.iataCode === selectedAirport.iataCode) {
                     return false;
                 }
+                
+                // If it's explicitly in the city group, definitely include it
+                if (group.includes(airport.iataCode)) return true;
+
                 const distance = getDistance(
                     { latitude: selectedAirport.latitude!, longitude: selectedAirport.longitude! },
                     { latitude: airport.latitude!, longitude: airport.longitude! }
                 );
-                return distance <= 200000;
+                return distance <= radius;
             })
             .map((airport) => {
                 const distance = getDistance(
@@ -346,7 +367,8 @@ export class SearchService {
                     distanceKm: Math.round(distance / 1000)
                 };
             })
-            .sort((a, b) => a.distanceKm - b.distanceKm);
+            .sort((a, b) => a.distanceKm - b.distanceKm)
+            .slice(0, 5); // Maximum 5 nearby airports
 
         return {
             mainAirport: {
