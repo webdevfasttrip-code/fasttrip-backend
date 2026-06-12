@@ -256,7 +256,7 @@ export class SearchService {
                 if (isAliasMatch) score += 5000;
 
                 // 3. Exact IATA Match
-                if (iata === qUpper) score += 1500;
+                if (iata === qUpper) score += 10000;
 
                 // 4. Starts With City
                 if (city.startsWith(qUpper) && city !== qUpper) score += 1200;
@@ -267,8 +267,13 @@ export class SearchService {
                 // 6. Starts With IATA
                 if (iata.startsWith(qUpper) && iata !== qUpper) score += 700;
 
-                // Tier 2: India Boost
-                if (airport.isoCountry === 'IN') score += 2500;
+                // Tier 2: Country / Regional Boost
+                const priorityCountries = ['IN', 'BT', 'BD', 'NP'];
+                if (airport.isoCountry === 'IN') {
+                    score += 5000;
+                } else if (airport.isoCountry && priorityCountries.includes(airport.isoCountry)) {
+                    score += 2000;
+                }
 
                 // Tier 3: Popular Destination Boost
                 const topTier = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX'];
@@ -292,13 +297,39 @@ export class SearchService {
             // STEP 4 - Slice to requested limit
             const topAirports = scoredAirports.slice(0, limit);
 
-            return topAirports.map(a => ({
+            const mappedAirports = topAirports.map(a => ({
                 ...a,
                 airport_name: a.airportName,
                 iata_code: a.iataCode,
                 iso_country: a.isoCountry,
                 iso_region: a.isoRegion
             }));
+
+            if (mappedAirports.length > 0) {
+                const mainAirport = mappedAirports[0];
+                let nearbyAirports: any[] = [];
+                let otherAirports = mappedAirports.slice(1);
+
+                try {
+                    const nearbyRes = await this.getNearbyAirports(mainAirport.iata_code as string);
+                    if (nearbyRes && nearbyRes.nearbyAirports) {
+                        nearbyAirports = nearbyRes.nearbyAirports;
+                        const nearbyIatas = nearbyAirports.map((n: any) => n.iata_code);
+                        otherAirports = otherAirports.filter(a => !nearbyIatas.includes(a.iata_code));
+                    }
+                } catch (e) {
+                    // Ignore errors fetching nearby airports
+                }
+
+                return {
+                    mainAirport,
+                    otherAirports,
+                    nearbyAirports,
+                    cityGroupAirports: []
+                };
+            }
+
+            return [];
         } catch (error) {
             return [];
         }
@@ -326,17 +357,38 @@ export class SearchService {
             }
         });
 
-        const METRO_AIRPORTS = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX', 'DXB', 'BKK', 'SIN'];
-        const radius = METRO_AIRPORTS.includes(selectedAirport.iataCode) ? 200000 : 100000;
+        const METRO_AIRPORTS = ['DEL', 'BOM', 'BLR', 'MAA', 'HYD', 'CCU', 'GOI', 'GOX', 'DXB', 'BKK', 'SIN', 'LHR', 'JFK', 'CDG', 'NRT'];
+        let radius = 100000;
+        if (selectedAirport.isMajor || METRO_AIRPORTS.includes(selectedAirport.iataCode as string)) {
+            radius = 200000;
+        } else if ((selectedAirport as any).airportType === 'REMOTE') {
+            radius = 150000;
+        }
 
         const CITY_GROUPS: Record<string, string[]> = {
-            "DEL": ["DEL", "HDO", "DXN"],
-            "BOM": ["BOM", "PNQ"],
+            "BKK": ["BKK", "DMK"],
+            "DMK": ["BKK", "DMK"],
             "GOI": ["GOI", "GOX"],
             "GOX": ["GOI", "GOX"],
-            "LHR": ["LHR", "LGW", "STN", "LTN"]
+            "DEL": ["DEL", "HDO", "DXN"],
+            "HDO": ["DEL", "HDO", "DXN"],
+            "DXN": ["DEL", "HDO", "DXN"],
+            "LHR": ["LHR", "LGW", "STN", "LTN", "LCY"],
+            "LGW": ["LHR", "LGW", "STN", "LTN", "LCY"],
+            "STN": ["LHR", "LGW", "STN", "LTN", "LCY"],
+            "LTN": ["LHR", "LGW", "STN", "LTN", "LCY"],
+            "LCY": ["LHR", "LGW", "STN", "LTN", "LCY"],
+            "JFK": ["JFK", "EWR", "LGA"],
+            "EWR": ["JFK", "EWR", "LGA"],
+            "LGA": ["JFK", "EWR", "LGA"],
+            "CDG": ["CDG", "ORY"],
+            "ORY": ["CDG", "ORY"],
+            "NRT": ["NRT", "HND"],
+            "HND": ["NRT", "HND"],
+            "BOM": ["BOM", "PNQ"],
+            "PNQ": ["BOM", "PNQ"]
         };
-        const group = CITY_GROUPS[selectedAirport.iataCode] || [];
+        const group = CITY_GROUPS[selectedAirport.iataCode as string] || [];
 
         const nearby = airports
             .filter((airport) => {
@@ -345,7 +397,7 @@ export class SearchService {
                 }
                 
                 // If it's explicitly in the city group, definitely include it
-                if (group.includes(airport.iataCode)) return true;
+                if (group.includes(airport.iataCode as string)) return true;
 
                 const distance = getDistance(
                     { latitude: selectedAirport.latitude!, longitude: selectedAirport.longitude! },
