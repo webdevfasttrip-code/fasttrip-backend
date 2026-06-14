@@ -11,6 +11,8 @@ import { MVFDProvider } from '../flights/providers/flights/mvfd.provider';
 import { InternalInventoryProvider } from '../flights/providers/flights/internal-inventory.provider';
 import { FareResult } from './interfaces/fare-result.interface';
 
+import { TypesenseService } from './typesense.service';
+
 @Injectable()
 export class SearchService {
     private readonly logger = new Logger(SearchService.name);
@@ -21,6 +23,7 @@ export class SearchService {
         private prisma: PrismaService,
         private markupService: MarkupService,
         private seriesFareService: SeriesFareService,
+        private typesenseService: TypesenseService,
     ) { }
 
     async search(dto: SearchFlightDto) {
@@ -203,142 +206,25 @@ export class SearchService {
     async searchAirports(query: SearchAirportDto) {
         const { q, limit = 10 } = query;
         if (!q || q.trim().length < 2) return [];
-        const searchTerm = q.trim();
-        const qUpper = searchTerm.toUpperCase();
-        const qLower = searchTerm.toLowerCase();
 
         try {
-            // Check for aliases
-            const searchIatas: string[] = [];
-            Object.entries(this.ALIAS_MAP).forEach(([alias, iatas]) => {
-                if (alias.startsWith(qLower) || qLower.startsWith(alias)) {
-                    searchIatas.push(...iatas);
-                }
-            });
-            if (qUpper.length === 3) searchIatas.push(qUpper);
+            console.time(`Typesense_${q}`);
+            const typesenseResults = await this.typesenseService.searchAirports(q, limit);
+            console.timeEnd(`Typesense_${q}`);
 
-            // STEP 1 - Query Candidate Airports
-            console.time(`DB_${searchTerm}`);
-            
-            // Guarantee exact IATA match is always included if searching a 3-letter code
-            const exactMatches = qUpper.length === 3 ? await this.prisma.airport.findMany({
-                where: { 
-                    iataCode: qUpper, 
-                    isSearchable: true, 
-                    airportType: { notIn: ['MILITARY', 'PRIVATE'] } 
-                }
-            }) : [];
-
-            const otherCandidates = await this.prisma.airport.findMany({
-                where: {
-                    isSearchable: true,
-                    airportType: { notIn: ['MILITARY', 'PRIVATE'] },
-                    OR: [
-                        { iataCode: { startsWith: searchTerm, mode: 'insensitive' } },
-                        { city: { startsWith: searchTerm, mode: 'insensitive' } },
-                        { airportName: { contains: searchTerm, mode: 'insensitive' } },
-                        ...(searchIatas.length > 0 ? [{ iataCode: { in: searchIatas } }] : [])
-                    ],
-                    ...(exactMatches.length > 0 ? { iataCode: { not: qUpper } } : {})
-                },
-                take: 50,
-            });
-            console.timeEnd(`DB_${searchTerm}`);
-
-            const candidates = [...exactMatches, ...otherCandidates];
-
-            if (candidates.length === 0) return [];
-
-            // STEP 2 - Calculate Weighted Priority Score
-            console.time(`Ranking_${searchTerm}`);
-            const scoredAirports = candidates.map(airport => {
-                let score = 0;
-                const iata = (airport.iataCode || '').toUpperCase();
-                const city = (airport.city || '').toUpperCase();
-                const name = (airport.airportName || '').toUpperCase();
-
-                let isAliasMatch = false;
-                for (const [alias, iatas] of Object.entries(this.ALIAS_MAP)) {
-                    if (alias === qLower && iatas.includes(iata)) {
-                        isAliasMatch = true;
-                        break;
-                    } else if (alias.startsWith(qLower) && iatas.includes(iata)) {
-                        isAliasMatch = true;
-                    }
-                }
-
-                // Tier 1: User Intent (Exact City or Alias Match)
-                if (city === qUpper) score += 8000;
-                if (isAliasMatch) score += 8000;
-
-                // Exact IATA Match
-                if (iata === qUpper) score += 10000;
-
-                // IATA Starts With
-                if (iata.startsWith(qUpper) && iata !== qUpper) score += 5000;
-
-                // City Starts With
-                if (city.startsWith(qUpper) && city !== qUpper) score += 3000;
-                
-                // Airport Name Contains
-                if (name.includes(qUpper)) score += 1000;
-
-                // Major Airport
-                if (airport.isMajor) score += 500;
-
-                // Country Priority
-                const priorityCountries = ['IN', 'BT', 'BD', 'NP'];
-                if (airport.isoCountry && priorityCountries.includes(airport.isoCountry)) {
-                    score += 300;
-                }
-
-                return { ...airport, score };
-            });
-
-            // STEP 3 - Sort by Score (Descending)
-            scoredAirports.sort((a, b) => b.score - a.score);
-
-            // STEP 4 - Slice to requested limit
-            const topAirports = scoredAirports.slice(0, limit);
-            console.timeEnd(`Ranking_${searchTerm}`);
-
-            const mappedAirports = topAirports.map(a => ({
-                ...a,
-                airport_name: a.airportName,
-                iata_code: a.iataCode,
-                iso_country: a.isoCountry,
-                iso_region: a.isoRegion
-            }));
-
-            if (mappedAirports.length > 0) {
-                const mainAirport = mappedAirports[0];
-                let nearbyAirports: any[] = [];
-                let otherAirports = mappedAirports.slice(1);
-
-                try {
-                    // console.time(`Nearby_${searchTerm}`);
-                    // const nearbyRes = await this.getNearbyAirports(mainAirport.iata_code as string);
-                    // console.timeEnd(`Nearby_${searchTerm}`);
-                    
-                    // if (nearbyRes && nearbyRes.nearbyAirports) {
-                    //     nearbyAirports = nearbyRes.nearbyAirports;
-                    //     const nearbyIatas = nearbyAirports.map((n: any) => n.iata_code);
-                    //     otherAirports = otherAirports.filter(a => !nearbyIatas.includes(a.iata_code));
-                    // }
-                } catch (e) {
-                    // Ignore errors fetching nearby airports
-                }
-
+            if (typesenseResults.length > 0) {
+                const mainAirport = typesenseResults[0];
+                const otherAirports = typesenseResults.slice(1);
                 return {
                     mainAirport,
                     otherAirports,
-                    nearbyAirports,
+                    nearbyAirports: [],
                     cityGroupAirports: []
                 };
             }
-
             return [];
         } catch (error) {
+            this.logger.error('Error in searchAirports', error);
             return [];
         }
     }

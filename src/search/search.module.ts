@@ -7,11 +7,12 @@ import { AdminModule } from '../admin/admin.module';
 
 import { MVFDProvider } from '../flights/providers/flights/mvfd.provider';
 import { InternalInventoryProvider } from '../flights/providers/flights/internal-inventory.provider';
+import { TypesenseService } from './typesense.service';
 
 @Module({
     imports: [PrismaModule, AdminModule],
     controllers: [SearchController],
-    providers: [SearchService, AmadeusService, MVFDProvider, InternalInventoryProvider],
-    exports: [SearchService],
+    providers: [SearchService, AmadeusService, MVFDProvider, InternalInventoryProvider, TypesenseService],
+    exports: [SearchService, TypesenseService],
 })
 export class SearchModule { }

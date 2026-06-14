@@ -13,6 +13,7 @@ import { SearchAirportDto } from './dto/search-airport.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Param } from '@nestjs/common';
 import { FareResult } from './interfaces/fare-result.interface';
+import { TypesenseService } from './typesense.service';
 
 @ApiTags('Search')
 @Controller({
@@ -20,7 +21,10 @@ import { FareResult } from './interfaces/fare-result.interface';
     version: '1',
 })
 export class SearchController {
-    constructor(private searchService: SearchService) { }
+    constructor(
+        private searchService: SearchService,
+        private typesenseService: TypesenseService
+    ) { }
 
     @Post()
     @ApiOperation({ summary: 'Search for flight offers' })
@@ -36,6 +40,12 @@ export class SearchController {
     @UsePipes(new ValidationPipe({ transform: true }))
     async searchAirports(@Query() query: SearchAirportDto) {
         return this.searchService.searchAirports(query);
+    }
+
+    @Post('typesense/sync')
+    @ApiOperation({ summary: 'Trigger Typesense airport sync' })
+    async syncTypesense() {
+        return this.typesenseService.syncAirports();
     }
 
     @Get('airports/nearby')
